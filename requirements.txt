@@ -5,3 +5,4 @@ pandas
 mysqlclient
 pymysql
 cryptography
+fastavro

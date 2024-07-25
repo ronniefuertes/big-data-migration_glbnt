@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import inspect
+from sqlalchemy import func, extract, text
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
 from typing import List
@@ -55,6 +56,75 @@ async def upload_csv(files: List[UploadFile] = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/employees-hired-2021/")
+async def get_employees_hired_2021():
+    try:
+        session = SessionLocal()
+
+        query = text("""
+        SELECT d.department, j.job, 
+               extract(quarter FROM he.datetime) AS quarter, 
+               COUNT(*) AS num_employees
+        FROM hired_employees he
+        JOIN departments d ON he.department_id = d.id
+        JOIN jobs j ON he.job_id = j.id
+        WHERE extract(year FROM he.datetime) = 2021
+        GROUP BY d.department, j.job, extract(quarter FROM he.datetime)
+        ORDER BY d.department, j.job, extract(quarter FROM he.datetime)
+        """)
+        
+        result = session.execute(query)
+        data = result.fetchall()
+
+        return {"data": [{"department": row[0], "job": row[1], "quarter": row[2], "num_employees": row[3]} for row in data]}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        session.close()
+
+@app.get("/departments-above-mean-2021/")
+async def get_departments_above_mean_2021():
+    try:
+        session = SessionLocal()
+
+        mean_query = text("""
+        SELECT AVG(num_employees) AS mean_employees
+        FROM (
+            SELECT d.id, d.department, COUNT(*) AS num_employees
+            FROM hired_employees he
+            JOIN departments d ON he.department_id = d.id
+            WHERE extract(year FROM he.datetime) = 2021
+            GROUP BY d.id, d.department
+        ) AS subquery
+        """)
+        
+        mean_result = session.execute(mean_query)
+        mean_employees = mean_result.scalar()
+        
+        departments_query = text("""
+        SELECT d.id, d.department, COUNT(*) AS num_employees
+        FROM hired_employees he
+        JOIN departments d ON he.department_id = d.id
+        WHERE extract(year FROM he.datetime) = 2021
+        GROUP BY d.id, d.department
+        HAVING COUNT(*) > :mean_employees
+        ORDER BY num_employees DESC
+        """)
+        
+        result = session.execute(departments_query, {"mean_employees": mean_employees})
+        data = result.fetchall()
+
+        return {"data": [{"id": row[0], "department": row[1], "num_employees": row[2]} for row in data]}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    finally:
+        session.close()
+
 
 def determine_table_name(filename):
     # Convert filename to lowercase for case-insensitive comparison

@@ -1,9 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import inspect
 import pandas as pd
-import os
+from typing import List
 
 DATABASE_URL = "mysql+pymysql://root:password@db/data_migration"
 
@@ -18,28 +18,35 @@ def read_root():
     return {"Hello": "World"}
 
 @app.post("/upload-csv/")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(files: List[UploadFile] = File(...)):
     try:
-        # Save uploaded file to disk
-        file_location = f"data/{file.filename}"
-        with open(file_location, "wb") as f:
-            f.write(file.file.read())
+        for file in files:
+            # Save uploaded file to disk
+            file_location = f"data/{file.filename}"
+            with open(file_location, "wb") as f:
+                f.write(file.file.read())
 
-        # Read CSV file using pandas
-        df = pd.read_csv(file_location)
+            # Determine table name from file name
+            table_name = determine_table_name(file.filename)
+            if table_name is None:
+                continue  # Skip file if table name is not recognized
 
-        # Determine table name from file name
-        table_name = determine_table_name(file.filename)
+            # Define column names based on table type
+            column_names = get_column_names(table_name)
 
-        # Check if table exists, if not, create it
-        inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            create_table(table_name, df)
+            # Read CSV file using pandas without headers and assign column names
+            df = pd.read_csv(file_location, header=None)
+            df.columns = column_names
 
-        # Insert data into table
-        df.to_sql(table_name, engine, if_exists='append', index=False)
+            # Check if table exists, if not, create it
+            inspector = inspect(engine)
+            if not inspector.has_table(table_name):
+                create_table(table_name, column_names)
 
-        return {"message": "File processed successfully"}
+            # Insert data into table
+            df.to_sql(table_name, engine, if_exists='append', index=False)
+
+        return {"message": "Files processed successfully"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -48,20 +55,34 @@ def determine_table_name(filename):
     # Convert filename to lowercase for case-insensitive comparison
     filename = filename.lower()
     
-    # Check if 'job' is in the filename
+    # Determine the table name based on filename
     if 'job' in filename:
         return "jobs"
+    elif 'department' in filename:
+        return "departments"
+    elif 'hired_employee' in filename:
+        return "hired_employees"
     
-    # Add more conditions for other tables if needed
-    return "unknown_table"
+    return None
 
-def create_table(table_name, df):
-    columns = []
-    for col in df.columns:
-        if col == "id":
-            columns.append(Column("id", Integer, primary_key=True))
+def get_column_names(table_name):
+    if table_name == "jobs":
+        return ["id", "job"]
+    elif table_name == "departments":
+        return ["id", "department"]
+    elif table_name == "hired_employees":
+        return ["id", "name", "datetime", "department_id", "job_id"]
+    return []
+
+def create_table(table_name, columns):
+    table_columns = []
+    for column in columns:
+        if column == "id":
+            table_columns.append(Column(column, Integer, primary_key=True))
+        elif column.endswith("_id"):
+            table_columns.append(Column(column, Integer))
         else:
-            columns.append(Column(col, String(255)))
+            table_columns.append(Column(column, String(255)))
     
-    table = Table(table_name, metadata, *columns)
+    table = Table(table_name, metadata, *table_columns, extend_existing=True)
     metadata.create_all(engine)

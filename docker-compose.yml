@@ -7,6 +7,8 @@ services:
       MYSQL_ROOT_PASSWORD: password
     ports:
       - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
 
   app:
     build: .
@@ -14,6 +16,8 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    volumes:
+      - ./data:/app/data
 
   phpMyAdmin:
     image: phpmyadmin
@@ -22,3 +26,6 @@ services:
       PMA_ARBITRARY: 1
     ports:
       - "8080:80"
+
+volumes:
+  mysql_data:

@@ -1,2 +1,7 @@
 fastapi
 uvicorn
+sqlalchemy
+pandas
+mysqlclient
+pymysql
+cryptography

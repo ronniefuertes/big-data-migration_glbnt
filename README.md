@@ -43,34 +43,37 @@ The tables in the MySQL database are structured as follows:
 
 ```bash
 git clone <https://github.com/ronniefuertes/big-data-migration_glbnt>
-cd <repository-directory>
+cd <big-data-migration_glbnt>
 ```
 
 2. Build and start the Docker containers:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-3. The FastAPI application will be available at http://localhost:8000.
+3. The FastAPI application will be available at http://localhost:8000
 
-4. To visually see the database go to http://localhost:8080
+4. To visually see the database go to phpMyAdmin at http://localhost:8080
 
 ## Usage
 ### Upload CSV Files
 
 1. Check ipAdress on bash terminal with: 
 ```bash
-docker container ls # to verify its running and its name (in case it was changed on docker-compose.yml)
+# To verify its running and the name (in case it was changed on docker-compose.yml)
+docker container ls 
 docker inspect docker_mysql # Find the ip at the end
 ```
-2. Sign in into phpMyAdmin with: ip, user: root, pass: password
+2. Sign in into phpMyAdmin with: server: ip, user: root, pass: password
 
 3. To upload multiple CSV files, use the following command:
 
 ```bash
 curl -X POST "http://localhost:8000/upload-csv/" -F "files=@data/jobs.csv" -F "files=@data/departments.csv" -F "files=@data/hired_employees.csv"
 ```
+
+## Data Rules
 ### CSV File Naming Convention
 The application determines the table name based on the CSV file names. The CSV files should follow these naming conventions:
 
@@ -85,11 +88,19 @@ Ensure that the CSV files do not have headers. The application assigns columns t
 - `departments`: 2 columns (id, department)
 - `hired_employees`: 5 column (id, name, datetime, department_id, job_id)
 
+### Data dictionary rules
+the system will not only check for duplicates within the CSV file but also ensure that no duplicate records are inserted into the database.
+
+- **Session Management**: Introduced SessionLocal for managing database sessions.
+- **Data Insertion with Duplication Check**: Added insert_data_with_check function to check for existing records in the database before inserting new ones. This function uses SQLAlchemy ORM to query the database and avoid inserting duplicates.
+- **Unique Constraints**: Ensure that the table schema includes primary keys or unique constraints where necessary.
+
 ## Project Structure
-- `app/main.py`: The main FastAPI application file.
-- `Dockerfile`: Dockerfile for building the FastAPI application.
-- `docker-compose.yml`: Docker Compose file for setting up the FastAPI application and MySQL database.
-- `data/`: Directory to store the uploaded CSV files.
+- **app/main.py**: The main FastAPI application file.
+- **Dockerfile**: Dockerfile for building the FastAPI application.
+- **docker-compose.yml**: Docker Compose file for setting up the FastAPI application and MySQL database.
+- **data/**: Directory to store the uploaded CSV files.
+- **documentation/**: Directory to store the file with the challenge.
 
 ## License
 This project is licensed under the MIT License.

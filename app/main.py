@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import inspect
+from sqlalchemy.orm import sessionmaker
 import pandas as pd
 from typing import List
 
@@ -12,6 +13,7 @@ app = FastAPI()
 # Database connection
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @app.get("/")
 def read_root():
@@ -38,13 +40,16 @@ async def upload_csv(files: List[UploadFile] = File(...)):
             df = pd.read_csv(file_location, header=None)
             df.columns = column_names
 
+            # Validate the data
+            df = validate_data(df, column_names)
+
             # Check if table exists, if not, create it
             inspector = inspect(engine)
             if not inspector.has_table(table_name):
                 create_table(table_name, column_names)
 
-            # Insert data into table
-            df.to_sql(table_name, engine, if_exists='append', index=False)
+            # Insert data into table with duplication check
+            insert_data_with_check(df, table_name)
 
         return {"message": "Files processed successfully"}
 
@@ -86,3 +91,31 @@ def create_table(table_name, columns):
     
     table = Table(table_name, metadata, *table_columns, extend_existing=True)
     metadata.create_all(engine)
+
+def validate_data(df, columns):
+    # Drop rows with any null or empty values
+    df.dropna(inplace=True)
+    df = df[df.apply(lambda x: x.str.strip() != '', axis=1)]
+
+    # Remove duplicates based on all columns
+    df.drop_duplicates(subset=columns, keep='first', inplace=True)
+
+    return df
+
+def insert_data_with_check(df, table_name):
+    session = SessionLocal()
+    table = Table(table_name, metadata, autoload_with=engine)
+    
+    try:
+        for _, row in df.iterrows():
+            # Check if the row already exists in the table
+            exists = session.query(table).filter_by(**row.to_dict()).first()
+            if not exists:
+                session.execute(table.insert().values(**row.to_dict()))
+        
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise
+    finally:
+        session.close()

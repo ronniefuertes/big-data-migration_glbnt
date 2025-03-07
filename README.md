@@ -31,6 +31,8 @@ This project automates the migration of CSV data into MySQL using AWS serverless
   - `POST /upload_csv`: Validate/transform CSV batches
   - `POST /backup/{table}`: Backup MySQL table to AVRO
   - `POST /restore/{table}`: Restore table from AVRO
+  - `POST /employees_hired_per_quarter}`: Retrieve the number of employees hired in 2021
+  - `POST /departments_above_mean_hires}`: Retrieve departments that hired more employees in 2021
 - **Validation**: Uses Pydantic models for data rules
 
 ### 4. RDS MySQL

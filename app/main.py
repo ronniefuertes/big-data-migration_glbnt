@@ -1,36 +1,33 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import inspect
+# main.py
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from sqlalchemy.exc import SQLAlchemyError
-import models
-from database import engine, get_db, Base
+
+from db import engine
+from models import Base
+from services.table_utils import check_required_tables, create_missing_tables
+from services.csv_processor import process_csv_file
 
 app = FastAPI()
 
-# Create tables on startup if they don't exist
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    try:
+        tables_exist, missing = check_required_tables(engine)
+        if not tables_exist:
+            create_missing_tables(engine)
+    except SQLAlchemyError as e:
+        raise RuntimeError(f"Database startup error: {e}")
 
 @app.get("/")
 def read_root():
-    return {"message": "Connected to RDS MySQL!"}
-
-@app.get("/check-tables")
-def check_tables(db: Session = Depends(get_db)):
     try:
-        inspector = inspect(db.get_bind())
-        existing_tables = inspector.get_table_names()
-        required_tables = {"hired_employees", "departments", "jobs"}
-        missing_tables = [tbl for tbl in required_tables if tbl not in existing_tables]
-        
-        return {
-            "existing_tables": existing_tables,
-            "required_tables": list(required_tables),
-            "missing_tables": missing_tables,
-            "all_tables_exist": len(missing_tables) == 0
-        }
+        tables_exist, missing = check_required_tables(engine)
+        if not tables_exist:
+            raise HTTPException(status_code=500, detail=f"Missing tables: {', '.join(missing)}")
+        return {"message": "All required tables exist"}
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload_csv")
+async def upload_csv(file: UploadFile = File(...)):
+    return await process_csv_file(file)

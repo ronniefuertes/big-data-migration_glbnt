@@ -6,7 +6,7 @@ This project automates the migration of CSV data into MySQL using AWS serverless
 
 ## Architecture Diagram
 
-![Architecture](images/Database migration.png)
+![Architecture](https://github.com/ronniefuertes/big-data-migration_glbnt/blob/main/images/Database%20migration.png)
 
 ## Key Components
 

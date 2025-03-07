@@ -1,8 +1,5 @@
 fastapi
 uvicorn
 sqlalchemy
-pandas
-mysqlclient
 pymysql
-cryptography
-fastavro
+python-dotenv

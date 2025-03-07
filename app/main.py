@@ -1,11 +1,12 @@
 # main.py
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 
 from db import engine
 from models import Base
 from services.table_utils import check_required_tables, create_missing_tables
 from services.csv_processor import process_csv_file
+from services.backup_service import backup_all_tables
 
 app = FastAPI()
 
@@ -29,5 +30,17 @@ def read_root():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload_csv")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(file: UploadFile):
     return await process_csv_file(file)
+
+@app.get("/backup")
+def backup_data():
+    """
+    Backs up all tables into Avro files and uploads them to AWS S3.
+    Returns the S3 URLs of the stored backups.
+    """
+    try:
+        backup_files = backup_all_tables()
+        return {"message": "Backup completed", "files": backup_files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {e}")

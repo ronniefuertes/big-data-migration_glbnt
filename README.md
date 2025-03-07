@@ -25,8 +25,10 @@ This project automates the migration of CSV data into MySQL using AWS serverless
   - Move files to `processed/` or `errors/`
 
 ### 3. REST API (FastAPI on EC2)
+- **Verification**:
+  - `/`: Validate connection with database and required tables
 - **Endpoints**:
-  - `POST /validate-transform`: Validate/transform CSV batches
+  - `POST /upload_csv`: Validate/transform CSV batches
   - `POST /backup/{table}`: Backup MySQL table to AVRO
   - `POST /restore/{table}`: Restore table from AVRO
 - **Validation**: Uses Pydantic models for data rules
@@ -34,6 +36,33 @@ This project automates the migration of CSV data into MySQL using AWS serverless
 ### 4. RDS MySQL
 - Stores validated data
 - Free Tier instance (db.t2.micro)
+
+#### Database Schema
+
+#### departments <!-- omit from toc -->
+  
+     | Column  | Type  | Description            |
+     |---------|-------|------------------------|
+     | id      | INT   | Primary Key            |
+     | name    | TEXT  | Name of the department |
+
+#### jobs <!-- omit from toc -->
+  
+     | Column  | Type  | Description              |
+     |---------|-------|--------------------------|
+     | id      | INT   | Primary Key              |
+     | name    | TEXT  | Name of the job position |
+
+#### hired_employees <!-- omit from toc -->
+  
+     | Column          | Type      | Description                     |
+     |-------------- --|-----------|---------------------------------|
+     | id              | INT       | Primary Key                     |
+     | name            | TEXT      | Employee's full name            |
+     | datetime        | TIMESTAMP | Date and time of hiring         |
+     | department_id   | INT       | Foreign Key → `departments(id)` |
+     | job_id          | INT       | Foreign Key → `jobs(id)`        |
+
 
 ## 📈 **Conclusion**  
 **The PoC validated**:  
@@ -53,15 +82,15 @@ This project automates the migration of CSV data into MySQL using AWS serverless
 ### 2. **End-to-End Connectivity**  
 - **S3 → Lambda → API → RDS workflow succeeded**:  
   - CSV files uploaded to `raw/` triggered Lambda within seconds.  
-  - API validated/transformed data at **~500 rows/sec** (tested with 10k rows).  
-  - Valid data inserted into RDS MySQL with **0% data loss**.  
+  - API validated/transformed data in batches up to 1000 without problems.  
+  - Valid data inserted into RDS MySQL.  
   - Invalid rows logged to `errors/` with descriptive error messages.  
 
 ### 3. **BI Tool Integration**  
 - **RDS MySQL connected to BI tools (e.g., Tableau, Power BI)**:  
-  - Queries executed without latency for small datasets (<10k rows).  
+  - Queries on RDS executed without latency for small datasets (<10k rows).  
 
 ### 4. **Backup/Restore Reliability**  
 - **AVRO backups**:  
-  - `POST /backup/users` created compressed AVRO files in `s3://your-bucket/backups/`.  
-  - `POST /restore/users` fully restored test tables from backups.  
+  - `POST /backup/` created compressed AVRO files in `s3://your-bucket/backups/`.  
+  - `POST /restore/` fully restored test tables from backups.  
